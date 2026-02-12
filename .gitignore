@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Models
+*.pt
+*.pth
+*.ckpt
+*.h5
+
+# Conda
+.env
+.venv
+env/
+venv/
+conda-meta/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data
+data/
+datasets/
+
+# Logs
+runs/
+logs/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
