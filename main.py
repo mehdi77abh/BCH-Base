@@ -1,6 +1,7 @@
 import json
 from collections import defaultdict
 import torch
+from tqdm import tqdm
 
 from tools.evaluation import evaluate
 from tools.flatten import flatten_model, unflatten_model
@@ -8,8 +9,6 @@ from tools.log_to_csv import log_to_csv
 from tools.parser_mapper import load_sensitivity, compute_filter_protection, load_tmr_sensitivity
 from tools.simulate_protection import simulate_tmr, simulate_bch, simulate_unprotected, generate_error_positions, \
     apply_flips
-
-
 
 
 # ----------------------------------------------------------------------
@@ -90,7 +89,8 @@ from tools.simulate_protection import simulate_tmr, simulate_bch, simulate_unpro
 #     }
 
 def run_experiment_repetitions(config, num_repetitions=15):
-    print(f"\n=== {config['model_name']} | BER={config['ber']:.0e} | TMR={config['tmr_per']}% | {num_repetitions} reps ===")
+    print(
+        f"\n=== {config['model_name']} | BER={config['ber']:.0e} | TMR={config['tmr_per']}% | {num_repetitions} reps ===")
 
     model = load_model(config['model_name'], config['model_dir'])
     sensitivity = load_tmr_sensitivity(config['rank_dir'], config['model_name'])
@@ -98,13 +98,10 @@ def run_experiment_repetitions(config, num_repetitions=15):
     protection_map = compute_filter_protection(model, sensitivity,
                                                config['tmr_per'],
                                                config['bch_high_per'])
-    print(sensitivity)
-    print("="*30)
-    print(protection_map)
-    print("="*30)
+
     print(f"\n=== Flatten Start ===")
     # Flatten once, keep clean weights
-    flat_weights_clean, weights_info = flatten_model(model, protection_map)
+    flat_weights_clean, protection, param_info = flatten_model(model, protection_map)
     total_bits = len(flat_weights_clean) * 32
     print(f"\n=== Flatten Finish ===")
 
@@ -117,7 +114,7 @@ def run_experiment_repetitions(config, num_repetitions=15):
     csv_path = f"{config['model_name']}_results.csv"
 
     # ---- Repetition loop ----
-    for rep in range(num_repetitions):
+    for rep in tqdm(range(num_repetitions)):
         # 1. Fresh copy of weights
         flat_weights = flat_weights_clean.clone()
 
@@ -126,44 +123,54 @@ def run_experiment_repetitions(config, num_repetitions=15):
         E1 = generate_error_positions(total_bits, config['ber'], seed=seed_base + 42)
         E2 = generate_error_positions(total_bits, config['ber'], seed=seed_base + 43)
         E3 = generate_error_positions(total_bits, config['ber'], seed=seed_base + 44)
-
+        print(f"Number #{rep + 1}:  Generate 3 Error position")
         # 3. Simulate protections (same functions, use flat_weights)
-        tmr_flips = simulate_tmr(weights_info, flat_weights, [E1, E2, E3])
+
+        tmr_flips = simulate_tmr(protection, [E1, E2, E3])
+        print(f"Number #{rep + 1}:  TMR FINISH")
         bch_flips = defaultdict(set)
-        if config['bch_high_per'] > 0:
-            bch_flips = simulate_bch(weights_info, flat_weights, E1)
-        unprotected_flips = simulate_unprotected(weights_info, flat_weights, E1)
+        # if config['bch_high_per'] > 0:
+        #     bch_flips = simulate_bch(protection, E1)
+        unprotected_flips = simulate_unprotected(protection, E1)
+        print(f"Number #{rep + 1} Unprotected_flips")
 
         # 4. Merge flips
         all_flips = defaultdict(set)
         for d in [tmr_flips, bch_flips, unprotected_flips]:
             for k, v in d.items():
                 all_flips[k].update(v)
+        print(f"Number #{rep + 1} Merge Flips")
 
         # 5. Apply flips to this flat_weights copy
         flat_weights = apply_flips(flat_weights, all_flips)
+        print(f"Number #{rep + 1} apply_flips")
 
         # 6. Restore model to original weights
         model.load_state_dict(original_state_dict)
 
         # 7. Write back the modified flat_weights into the model
-        unflatten_model(model, flat_weights, weights_info)
+        unflatten_model(model, flat_weights, param_info)
+        print(f"Number #{rep + 1} Unflatten")
+
+        print(f"Number #{rep + 1} Start Eval")
 
         # 8. Evaluate
         acc, tacc, prec, rec, conf, sub_conf, acc_50 = evaluate(
             model, config['dataset_name'], config['dataset_dir']
         )
+        print(f"Number #{rep + 1} END Eval")
 
         # 9. Log to CSV (one row per repetition)
         log_to_csv(csv_path,
                    config['ber'],
                    config['tmr_per'],
-                   rep,              # iteration number
+                   rep,  # iteration number
                    acc, tacc, prec, rec, conf, sub_conf, acc_50)
 
-        print(f"   Rep {rep+1:2d}: Acc = {acc:.4f}")
+        print(f"   Rep {rep + 1:2d}: Acc = {acc:.4f}")
 
     print(f"=== Finished {num_repetitions} repetitions ===")
+
 
 def load_model(model_name, model_dir):
     """
@@ -189,10 +196,9 @@ if __name__ == '__main__':
     with open(config_path, 'r') as f:
         configs = json.load(f)
     results = []
-    REPETITIONS  = 15
+    REPETITIONS = 15
     # for cfg in configs:
     run_experiment_repetitions(configs[0], REPETITIONS)
-
 
     # Save summary
     with open('hardening_results.json', 'w') as f:

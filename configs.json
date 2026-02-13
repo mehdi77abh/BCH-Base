@@ -1,12 +1,12 @@
 [
   {
-    "model_name":   "VGG11", "prune_percent": 80, "model_dir": "./VGG11_80.pt",
+    "model_name":   "VGG11", "prune_percent": 80, "model_dir": "./models/VGG11_80.pt",
     "rank_dir":     "./filter_ranks_80%_prune.json",
     "dataset_name": "CIFAR100", "dataset_dir": "./data", "ber": 5e-6,
     "tmr_per":      60, "bch_high_per": 0, "bch_low_per": 0
   },
   {
-    "model_name":   "VGG11", "prune_percent": 80, "model_dir": "./VGG11_80.pt",
+    "model_name":   "VGG11", "prune_percent": 80, "model_dir": "./models/VGG11_80.pt",
     "rank_dir":     "./filter_ranks_80%_prune.json",
     "dataset_name": "CIFAR100", "dataset_dir": "./data", "ber": 1e-5,
     "tmr_per":      60, "bch_high_per": 0, "bch_low_per": 0

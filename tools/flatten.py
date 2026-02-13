@@ -1,61 +1,66 @@
 import torch
 
-
-# ----------------------------------------------------------------------
-#  Flattening / unflattening model weights
-# ----------------------------------------------------------------------
-
 def flatten_model(model, protection_map):
     """
-    Flatten all convolutional weight parameters into a 1D tensor of float32.
-    Also build weights_info list for later unflattening and protection lookup.
+    Flatten all convolutional weight parameters into a 1D tensor.
+    Also build a protection tensor (int codes) and param_info for unflattening.
+
+    Args:
+        model: PyTorch model
+        protection_map: dict {(layer_name, filter_idx): 'TMR'|'BCH'|'None'}
 
     Returns:
-        flat_weights: torch.Tensor of shape (num_weights,), dtype=torch.float32
-        weights_info: list of dict, each with keys:
-            'global_idx': index in flat_weights
-            'param_ref': reference to the parameter tensor
-            'param_flat_idx': index in the flattened parameter (param.view(-1))
-            'protection': 'TMR'/'BCH'/'None'
+        flat_weights: 1D torch.Tensor of all weights (float32)
+        protection:   1D torch.Tensor of same length with codes 0=None,1=TMR,2=BCH
+        param_info:   list of dicts with keys: 'param_ref', 'start', 'end', 'shape'
     """
     flat_weights_list = []
-    weights_info = []
-    global_idx = 0
+    protection_list = []
+    param_info = []
+    global_start = 0
+
+    code_map = {'None': 0, 'TMR': 1, 'BCH': 2}
 
     for name, param in model.named_parameters():
-        # and param.dim() == 4
-        if 'weight' in name and 'norm' not in name:
+        # Only conv weights (4D) and exclude norm layers
+        if 'weight' in name and 'norm' not in name and param.dim() == 4:
             layer_name = name.replace('.weight', '')
-            param_flat = param.view(-1)
             out_channels = param.shape[0]
-            # Number of weight elements per filter
-            elems_per_filter = param[0].numel()
+            param_flat = param.view(-1)
+            num_weights = param_flat.numel()
+            elems_per_filter = num_weights // out_channels
+
+            # Build per‑filter protection codes
+            filter_codes = []
             for fidx in range(out_channels):
-                start = fidx * elems_per_filter
-                end = start + elems_per_filter
-                protection = protection_map.get((layer_name, fidx), 'None')
-                for i in range(start, end):
-                    flat_weights_list.append(param_flat[i].item())
-                    weights_info.append({
-                        'global_idx': global_idx,
-                        'param_ref': param,
-                        'param_flat_idx': i,
-                        'protection': protection
-                    })
-                    global_idx += 1
+                prot = protection_map.get((layer_name, fidx), 'None')
+                filter_codes.append(code_map[prot])
 
-                    # Save
+            # Repeat each code for the number of elements in that filter
+            filter_codes_tensor = torch.tensor(filter_codes, dtype=torch.int)
+            prot_tensor = filter_codes_tensor.repeat_interleave(elems_per_filter)
 
-    flat_weights = torch.tensor(flat_weights_list, dtype=torch.float32)
-    return flat_weights, weights_info
+            flat_weights_list.append(param_flat)
+            protection_list.append(prot_tensor)
+            param_info.append({
+                'param_ref': param,
+                'start': global_start,
+                'end': global_start + num_weights,
+                'shape': param.shape
+            })
+            global_start += num_weights
+
+    flat_weights = torch.cat(flat_weights_list)
+    protection = torch.cat(protection_list)
+    return flat_weights, protection, param_info
 
 
-def unflatten_model(model, flat_weights_tensor, weights_info):
+def unflatten_model(model, flat_weights, param_info):
     """
-    Write back the modified flat_weights into the model parameters.
+    Write back the modified flat_weights into the model parameters using param_info.
     """
-    for w_info in weights_info:
-        param = w_info['param_ref']
-        flat_idx = w_info['param_flat_idx']
-        new_val = flat_weights_tensor[w_info['global_idx']]
-        param.view(-1)[flat_idx] = new_val
+    for info in param_info:
+        param = info['param_ref']
+        start = info['start']
+        end = info['end']
+        param.data.copy_(flat_weights[start:end].view(info['shape']))

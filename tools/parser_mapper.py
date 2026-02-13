@@ -16,44 +16,40 @@ def parse_sensitivity_key(key):
     filter_idx = int(filter_part.replace('filter', ''))
     return layer_part, filter_idx
 
-def load_tmr_sensitivity(rank_dir, model_name):
+def load_tmr_sensitivity(rank_dir, model_name, layer_mapping=None):
     """
-    Load sensitivity JSON and return a dict {(layer_name, filter_idx): score}.
-    Handles both the original flat format and the new nested format.
+    Load sensitivity JSON and return dict {(layer_name, filter_idx): score}.
+    Handles both nested (first) and flat (second) formats.
+    If layer_mapping is provided, maps JSON layer keys to actual layer names.
     """
+    layer_mapping = {
+        "Layer_1_Conv2d_3to64": "features.0",
+        "Layer_2_Conv2d_64to128": "features.3",
+        "Layer_3_Conv2d_128to256": "features.6",
+        "Layer_4_Conv2d_256to256": "features.8",
+        "Layer_5_Conv2d_256to512": "features.11",
+        "Layer_6_Conv2d_512to512": "features.13",
+        "Layer_7_Conv2d_512to512": "features.15",
+        "Layer_8_Conv2d_512to512": "features.17",
+    }
     with open(rank_dir, 'r') as f:
         data = json.load(f)
 
     sensitivity = {}
-
-    # ---- Detect format ----
     first_key = next(iter(data))
-    # ... (detect format) ...
     if isinstance(data[first_key], dict):
-        # NESTED format
-        layer_mapping = {...}   # your mapping
-        sensitivity = {}
-        for layer_name, filters_dict in data.items():
-            actual_layer = layer_mapping.get(layer_name, layer_name)
-
-            # ---- Sort filters by score DESCENDING ----
-            sorted_filters = sorted(filters_dict.items(),
-                                   key=lambda x: x[1],
-                                   reverse=True)
-
-            for filter_key, score in sorted_filters:
+        # Nested format (first scheme)
+        for layer_key, filters_dict in data.items():
+            actual_layer = layer_mapping.get(layer_key, layer_key) if layer_mapping else layer_key
+            for filter_key, score in filters_dict.items():
                 filter_idx = int(filter_key.replace('Filter_', ''))
                 sensitivity[(actual_layer, filter_idx)] = float(score)
-        return sensitivity
     else:
-        # ORIGINAL flat format – also sort if desired
-        items = sorted(data.items(), key=lambda x: x[1], reverse=True)
-        sensitivity = {}
-        for key, score in items:
+        # Flat format (second scheme)
+        for key, score in data.items():
             layer, fidx = parse_sensitivity_key(key)
-            sensitivity[(layer, fidx)] = score
-        return sensitivity
-
+            sensitivity[(layer, fidx)] = float(score)
+    return sensitivity
 
 def load_sensitivity(rank_dir, model_name):
     """
