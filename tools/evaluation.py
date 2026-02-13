@@ -21,7 +21,7 @@ def evaluate(model, dataset_name, dataset_dir, device=None):
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=32, shuffle=False, num_workers=2)
 
     # test_loader = get_test_loader(dataset_name, dataset_dir)
-
+    num_classes = len(test_data.classes)
     if device is None:
         device = next(model.parameters()).device
 
@@ -33,7 +33,7 @@ def evaluate(model, dataset_name, dataset_dir, device=None):
     precision_metric = Precision(average=True)      # macro by default
     recall_metric = Recall(average=True)            # macro by default
     # ConfusionMatrix returns a tensor; we will convert to list later
-    conf_metric = ConfusionMatrix(num_classes=10)   # Adjust num_classes!
+    conf_metric = ConfusionMatrix(num_classes=num_classes)   # Adjust num_classes!
     # For binary threshold 0.5, we can either use Accuracy with threshold or compute manually
     # We'll compute acc_50 manually for clarity
 
