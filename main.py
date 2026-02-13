@@ -98,4 +98,5 @@ def run_experiment_repetitions(config, num_repetitions=15):
 if __name__ == '__main__':
     with open('configs.json') as f:
         configs = json.load(f)
-    run_experiment_repetitions(configs[0], 15)
+    for config in configs:
+        run_experiment_repetitions(config, 10)
