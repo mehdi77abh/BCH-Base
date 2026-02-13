@@ -4,28 +4,20 @@ import torch
 from tools.ieee754 import bitFLIP_v3_tensor   # unchanged from your code
 
 def generate_error_positions(total_bits, ber, seed=None):
+    # total_bits must be total_weights * 31
     if seed is not None:
         random.seed(seed)
+    num_errors = int(total_bits * ber)          # truncation, as in OLD
+    indices = random.sample(range(total_bits), num_errors)
+    return set(indices)                          # raw positions (0 … total_bits-1)
 
-    num_errors = int(round(total_bits * ber))
-    total_weights = total_bits // 32
-    # Sample from 31 mutable bits per weight
-    valid_positions_count = total_weights * 31
-    indices = random.sample(range(valid_positions_count), num_errors)
-    positions = set()
-    for idx in indices:
-        weight_idx = idx // 31
-        bit_offset = idx % 31
-        global_pos = weight_idx * 32 + (bit_offset + 1)   # skip sign bit
-        positions.add(global_pos)
-    return positions
 
 def positions_to_weight_bits(error_set):
     """Convert global bit positions to dict {weight_idx: set of mutable bits (0..30)}."""
     wmap = defaultdict(set)
     for pos in error_set:
-        weight_idx = pos // 32
-        bit = pos % 32 - 1          # 0‑based mutable bit
+        weight_idx = pos // 31
+        bit = pos % 31          # 0‑based mutable bit
         wmap[weight_idx].add(bit)
     return wmap
 
@@ -100,3 +92,42 @@ def simulate_unprotected(protection, E1):
         if bits:
             flips[w] = bits
     return flips
+
+
+
+def simulate_old_style(protected_indices, E1, E2, E3, flat_weights):
+    # Convert error sets to weight→bits maps
+    maps = [positions_to_weight_bits(err) for err in (E1, E2, E3)]
+
+    # Count occurrences of (weight, bit) across all three sets
+    counter = defaultdict(int)
+    for m in maps:
+        for w, bits in m.items():
+            for b in bits:
+                counter[(w, b)] += 1
+
+    # TMR flips: count ≥2 and weight in protected
+    tmr_flips = defaultdict(set)
+    for (w, b), cnt in counter.items():
+        if cnt >= 2 and w in protected_indices:
+            tmr_flips[w].add(b)
+
+    # Single flips: all bits from E1 whose weight is NOT protected
+    single_flips = defaultdict(set)
+    e1_map = maps[0]   # positions from E1
+    for w, bits in e1_map.items():
+        if w not in protected_indices:
+            single_flips[w].update(bits)
+
+    # Merge flips (they are disjoint because of the protected condition)
+    all_flips = defaultdict(set)
+    for d in (tmr_flips, single_flips):
+        for w, bits in d.items():
+            all_flips[w].update(bits)
+
+    # Remove flips for zero‑valued weights (OLD behaviour)
+    zero_weights = [w for w in all_flips if flat_weights[w] == 0]
+    for w in zero_weights:
+        del all_flips[w]
+
+    return all_flips

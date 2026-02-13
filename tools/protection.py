@@ -15,6 +15,8 @@ def get_all_filters(model):
 def compute_protection(model, sensitivity, tmr_percent, bch_percent):
     """
     Returns a dict {(layer, filter_idx): 'TMR'|'BCH'|'None'}.
+    ('features.0', 13): 'TMR'
+
     """
     all_filters = get_all_filters(model)
     # Assign scores (default 0 if filter not in sensitivity)
@@ -35,3 +37,22 @@ def compute_protection(model, sensitivity, tmr_percent, bch_percent):
         else:
             protection[f] = 'None'
     return protection
+
+
+def load_protected_indices_from_json(json_path, total_weights):
+    import json
+    with open(json_path) as f:
+        range_data = json.load(f)
+
+    protected = set()
+    for block in range_data.values():
+        for layer in block.values():
+            for bounds in layer.values():
+                start_bit, end_bit = bounds
+                start_w = start_bit // 31
+                end_w = end_bit // 31
+                # Clip to the actual range of convolution weights
+                for w in range(start_w, end_w + 1):
+                    if 0 <= w < total_weights:
+                        protected.add(w)
+    return protected

@@ -13,6 +13,8 @@ def load_sensitivity(rank_path, model_name=None, layer_mapping=None):
     Load sensitivity JSON and return dict {(actual_layer, filter_idx): score}.
     - If nested (first scheme), layer_mapping must map descriptive keys to actual names.
     - If flat (second scheme), no mapping needed.
+    ('features.0', 0): 177.47
+    ('features.0', 1): 1.0
     """
     with open(rank_path, 'r') as f:
         data = json.load(f)
@@ -37,3 +39,5 @@ def load_sensitivity(rank_path, model_name=None, layer_mapping=None):
             sensitivity[(layer, fidx)] = float(score)
 
     return sensitivity
+
+

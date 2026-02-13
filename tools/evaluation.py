@@ -17,7 +17,7 @@ def evaluate(model, dataset_name, dataset_dir, device=None):
     ])
 
     # test data
-    test_data = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform)
+    test_data = torchvision.datasets.CIFAR100(root='./data', train=False, download=False, transform=transform)
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=32, shuffle=False, num_workers=2)
 
     # test_loader = get_test_loader(dataset_name, dataset_dir)
