@@ -61,10 +61,10 @@ def evaluate(model, dataset_name, dataset_dir, device=None):
             all_labels.append(labels.cpu())
 
     # ---- Compute final metric values ----
-    acc = accuracy_metric.compute().item()
-    tacc = top5_metric.compute().item()
-    prec = precision_metric.compute().item()
-    rec = recall_metric.compute().item()
+    acc = accuracy_metric.compute()
+    tacc = top5_metric.compute()
+    prec = precision_metric.compute()
+    rec = recall_metric.compute()
     conf_matrix = conf_metric.compute().cpu().numpy().tolist()   # JSON serializable
 
     # ---- Sub confusion matrix (e.g., first 10 classes) ----
