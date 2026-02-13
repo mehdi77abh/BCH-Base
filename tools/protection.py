@@ -5,7 +5,7 @@ def get_all_filters(model):
     """Return list of (layer_name, filter_idx) for all conv filters."""
     filters = []
     for name, param in model.named_parameters():
-        if 'weight' in name and 'norm' not in name and param.dim() == 4:
+        if 'weight' in name and 'norm' not in name:
             layer_name = name.replace('.weight', '')
             out_channels = param.shape[0]
             for fidx in range(out_channels):

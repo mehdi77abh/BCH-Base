@@ -15,7 +15,7 @@ def flatten_model(model, protection_map):
     global_start = 0
 
     for name, param in model.named_parameters():
-        if 'weight' in name and 'norm' not in name and param.dim() == 4:
+        if 'weight' in name and 'norm' not in name:
             layer_name = name.replace('.weight', '')
             out_channels = param.shape[0]
             wpf = param[0].numel()                     # weights per filter
